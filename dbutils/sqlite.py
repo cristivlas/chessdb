@@ -1,7 +1,7 @@
 import sqlite3
 
-
 class SQLConn:
+    """ Sqlite3 Connection Wrapper """
     def __init__(self, db_file):
         self._conn = sqlite3.connect(db_file)
         self._cursor = None

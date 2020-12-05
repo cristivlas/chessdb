@@ -7,6 +7,7 @@ ecoAPI = EcoAPI()
 
 RESULT = [WIN, LOSS, DRAW] = [1, 0, 1/2]
 
+# normalize result encodings
 __result = {
     '1/2': [ DRAW, DRAW  ],
 '1/2-1/2': [ DRAW, DRAW  ],

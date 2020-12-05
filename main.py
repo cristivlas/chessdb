@@ -1,3 +1,6 @@
+"""
+Extract chess games from PGN-format (.pgn, .zip) into Sqlite3 database
+"""
 from chessutils.eco import *
 from chessutils.pgn import *
 from dbutils.sqlite import SQLConn
@@ -6,7 +9,10 @@ from functools import partial
 
 import argparse
 
-
+"""
+Build table of ECO-classified openings
+https://en.wikipedia.org/wiki/Encyclopaedia_of_Chess_Openings
+"""
 _create_openings_table = """CREATE TABLE openings(
     id integer PRIMARY KEY,
     eco text NOT NULL,
@@ -93,9 +99,10 @@ def add_to_db(sql_conn, count, fname):
 
 
 if __name__ == '__main__':
+    """ Specify a list of files and directories containing PGN files and/or ZIP files """
     parser = argparse.ArgumentParser()
     parser.add_argument('input', nargs='+')
-    parser.add_argument('-db')
+    parser.add_argument('-db', required=True)
     args = parser.parse_args()
 
     init_db(args.db)
