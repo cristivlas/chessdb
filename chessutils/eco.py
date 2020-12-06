@@ -6,11 +6,12 @@ import re
 class EcoAPI:
     """
         API for looking up moves in The Encyclopaedia of Chess Openings
-        https://en.wikipedia.org/wiki/Encyclopaedia_of_Chess_Openings
-        https://github.com/niklasf/eco
+        (see https://en.wikipedia.org/wiki/Encyclopaedia_of_Chess_Openings)
+
+        Powered by: https://github.com/niklasf/eco
     """
     def __init__(self, data_dir=None):
-        """ read TSV files and index by FEN """
+        """ read tab-separated-value files and store them in db dictionary by FEN """
         self.data_dir = data_dir or os.path.join(os.path.dirname(__file__), 'eco')
         self.db = {}
 
@@ -19,6 +20,12 @@ class EcoAPI:
 
     @staticmethod
     def __normalize_opening_name(entry):
+        """
+        Use a regular expression to separate the main name of
+        the opening from its variation, if it's in a format like:
+
+        Ruy Lopez: Morphy Variation
+        """
         name = entry['name']
         match = re.match('(.*): (.*)', name)
         if match:
@@ -35,7 +42,7 @@ class EcoAPI:
     def _read_tsv_file(self, fname):
         with open(fname) as f:
             reader = csv.DictReader(f, dialect='excel-tab')
-            for row in reader:                
+            for row in reader:
                 self.db[row['fen']] = EcoAPI.__normalize_opening_name(row)
 
     def lookup(self, board):

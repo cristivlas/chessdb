@@ -1,4 +1,7 @@
-
+"""
+Extend the FileCrawler with the ability to look inside ZIP files.
+ZIPs are expanded into temporary directories which are automatically deleted.
+"""
 from .filecrawl import FileCrawler, walk_directory
 from functools import partial
 from zipfile import ZipFile
@@ -6,7 +9,7 @@ import shutil
 import tempfile
 
 
-def extract_from_zip(callbacks, default_callback, fname):
+def _extract_from_zip(callbacks, default_callback, fname):
     with ZipFile(fname, 'r') as archive:
         try:
             print (f'Expanding {fname}\033[K')
@@ -22,5 +25,4 @@ class ZipCrawler(FileCrawler):
     """ A FileCrawler that also digs into zip files """
     def __init__(self, paths, default_callback=lambda _: None):
         super().__init__(paths, default_callback)
-        self._callbacks['.zip'] = partial(extract_from_zip, self._callbacks, self._default_callback)
-
+        self.set_action('.zip', partial(_extract_from_zip, self._callbacks, default_callback))

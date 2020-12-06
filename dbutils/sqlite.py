@@ -5,6 +5,7 @@ class SQLConn:
     def __init__(self, db_file):
         self._conn = sqlite3.connect(db_file)
         self._cursor = None
+        self._dry_run = False
 
     def __enter__(self):
         return self
@@ -24,4 +25,5 @@ class SQLConn:
 
     def exec(self, *args):
         self._cursor = self._conn.cursor()
-        self._cursor.execute(*args)
+        if not self._dry_run:
+            self._cursor.execute(*args)

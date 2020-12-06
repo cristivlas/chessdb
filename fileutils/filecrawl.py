@@ -13,13 +13,9 @@ def walk_directory(dir, callbacks, default_callback):
     For each non-directory entry encountered, lookup callback by file extension and invoke it.
     Stop recursing when callback returns True.
     """
-
     for root, dirs, files in os.walk(dir):
         for f in sorted(files):
             if file_ext_callback(root, f, callbacks, default_callback):
-                return True
-        for d in dirs:
-            if walk_directory(d, callbacks, default_callback):
                 return True
 
 
@@ -36,6 +32,15 @@ class FileCrawler:
             else:
                 file_ext_callback('.', path, self._callbacks, self._default_callback)
 
-
     def set_action(self, file_extension, action):
         self._callbacks[file_extension.lower()]=action
+
+
+"""
+Example:
+    print the name of all Python source code files in the current directory tree
+"""
+if __name__ == '__main__':
+    dir_crawler = FileCrawler('.')
+    dir_crawler.set_action('.py', lambda f: print(f))
+    dir_crawler.crawl()

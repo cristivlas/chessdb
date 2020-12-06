@@ -60,15 +60,18 @@ def __cleanup(info):
 
 
 def __normalize_name(name):
+    def capitalize(n):
+        return ' '.join([t.strip().capitalize() for t in n]).strip()
+
     tok = name.split(',')
     FIRST, LAST = -1, 0
     if len(tok)==1:
         tok = name.split()
         FIRST, LAST = LAST, FIRST
-    first = tok[FIRST].strip()
-    last = tok[LAST].strip()
+    first = tok[FIRST]
+    last = tok[LAST]
     middle = tok[1:-1] if len(tok)>2 else []
-    return (last, ' '.join([first] + middle).strip())
+    return capitalize(last.split()), capitalize(first.split() + middle)
 
 
 def game_metadata(game):
@@ -92,9 +95,12 @@ def game_moves(game):
 def game_opening(game):
     opening = None
     board = game.board()
+    # go through the moves and apply them to the board
     for move in game.mainline_moves():
         board.push(move)
+        # lookup the opening that matches the current board configuration
         entry = ecoAPI.lookup(board)
         if entry:
             opening = entry
+    # return the last match, if any
     return opening
