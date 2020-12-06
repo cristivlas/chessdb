@@ -31,9 +31,10 @@ class FileCrawler:
     def crawl(self):
         for path in self._paths:
             if os.path.isdir(path):
-                walk_directory(path, self._callbacks, self._default_callback)
-            else:
-                file_ext_callback('.', path, self._callbacks, self._default_callback)
+                if walk_directory(path, self._callbacks, self._default_callback):
+                    return True
+            elif file_ext_callback('.', path, self._callbacks, self._default_callback):
+                return True
 
     def set_action(self, file_extension, action):
         self._callbacks[file_extension.lower()]=action

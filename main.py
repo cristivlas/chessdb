@@ -80,8 +80,6 @@ __players = defaultdict(dict)
 def _add_player_to_db(sql_conn, name):
     sql_conn.exec('INSERT INTO players(name, first_middle) VALUES(?,?)', name)
     id = sql_conn.commit()
-    if sql_conn._dry_run:
-        id = -1
     __players[name[0]][name[1]] = id
     return id
 
@@ -167,7 +165,6 @@ if __name__ == '__main__':
     parser.add_argument('input', nargs='+')
     parser.add_argument('-db', required=True)
     parser.add_argument('-c', '--clean', action='store_true')
-    parser.add_argument('-t', '--test', action='store_true')
     args = parser.parse_args()
 
     if args.clean:
@@ -175,15 +172,12 @@ if __name__ == '__main__':
 
     init_db(args.db)
 
-    with SQLConn(args.db) as sql_conn:
-        if args.test:
-            sql_conn._dry_run = True
-        crawler = ZipCrawler(args.input)
-        crawler.set_action('.pgn', partial(add_to_db, sql_conn, [0]))
-        crawler.crawl()
+    try:
+        with SQLConn(args.db) as sql_conn:
+            crawler = ZipCrawler(args.input)
+            crawler.set_action('.pgn', partial(add_to_db, sql_conn, [0]))
+            crawler.crawl()
+    except KeyboardInterrupt:
+        pass
 
     print()
-
-    if args.test:
-        for n, f in __players.items():
-            print (f'{n} {f}')
