@@ -9,9 +9,12 @@ def file_ext_callback(root, fname, callbacks, default_callback):
 
 def walk_directory(dir, callbacks, default_callback):
     """
-    Recursively walk a directory.
-    For each non-directory entry encountered, lookup callback by file extension and invoke it.
-    Stop recursing when callback returns True.
+    Walk a directory tree.
+    
+    For each non-directory entry encountered: 
+    lookup callback by file extension and invoke it.
+    
+    Stop when callback returns True.
     """
     for root, dirs, files in os.walk(dir):
         for f in sorted(files):
