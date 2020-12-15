@@ -29,7 +29,7 @@ def read_games(fname):
     with open(fname, encoding='utf-8') as f:
         while True:
             try:
-                game = chess.pgn.read_game(f)                
+                game = chess.pgn.read_game(f)
             except:
                 break
             if not game or game.errors:
@@ -44,10 +44,16 @@ def __is_valid(game):
         if not board.is_legal(move):
             return False
         board.push(move)
+
+        # Make sure the winner was recorded correctly...
+        reshdr = game.headers['Result']
         if board.is_checkmate():
-            if __result[game.headers['Result']][board.turn] != LOSS:
+            if __result[reshdr][board.turn] != LOSS:
                 return False
-            assert __result[game.headers['Result']][not board.turn] == WIN
+            assert __result[reshdr][not board.turn] == WIN
+
+        if board.is_stalemate():
+            return __result[reshdr][board.turn]==DRAW and __result[reshdr][not board.turn]==DRAW
     return bool(board.move_stack)
 
 

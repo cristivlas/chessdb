@@ -1,3 +1,4 @@
+#! /usr/bin/env python3
 """
 Extract chess games from PGN-format (.pgn, .zip) into Sqlite3 database
 
@@ -162,16 +163,16 @@ def add_to_db(sql_conn, count, fname):
 if __name__ == '__main__':
     """ Specify a list of files and directories containing PGN files and/or ZIP files """
     parser = argparse.ArgumentParser()
-    parser.add_argument('input', nargs='+')
-    parser.add_argument('-db', required=True)
-    parser.add_argument('-c', '--clean', action='store_true')
+    parser.add_argument('input', nargs='+', help='list of PGN files and/or folders with PGNs (or zipped PGNs)')
+    parser.add_argument('-db', required=True, help='file name for the output sqlite3 database')
+    parser.add_argument('-c', '--clean', action='store_true', help='delete database if already exists')
     args = parser.parse_args()
 
     if args.clean:
         os.unlink(args.db)
 
     init_db(args.db)
-
+    chess.pgn.LOGGER.setLevel(50) # silence off PGN warnings
     try:
         with SQLConn(args.db) as sql_conn:
             crawler = ZipCrawler(args.input)
