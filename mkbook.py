@@ -55,16 +55,19 @@ def make_opening_book(args):
         print()
         output_book(args)
     except KeyboardInterrupt:
-        pass
-    print()
+        print()
 
 
 def output_book(args):
     count = 0
     with open(args.out, 'wb') as f:
-        # the search algorithm expects entries to be sorted by key
+        # The search algorithm expects entries to be sorted by key.
         for key in sorted(moves_table.keys()):
-            for move in moves_table[key]:
+            moves_list = moves_table[key]
+            moves_list.sort(key=lambda move: move.weight, reverse=True)
+
+            # Keep only the top 5, to limit the size of the output file
+            for move in moves_list[:5]:
                 entry = ENTRY_STRUCT.pack(key, encode_move(move), int(move.weight), 0)
                 assert len(entry)==16
                 f.write(entry)
@@ -105,11 +108,11 @@ def test_encode_move():
         test_move = chess.Move.from_uci(uci_move)
         raw_move = encode_move(test_move)
 
-        # Extract source and target square.
+        # Encode source and target square.
         to_square = raw_move & 0x3f
         from_square = (raw_move >> 6) & 0x3f
 
-        # Extract the promotion type.
+        # Encode the promotion type.
         promotion_part = (raw_move >> 12) & 0x7
         promotion = promotion_part + 1 if promotion_part else None
 
