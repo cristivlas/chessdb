@@ -10,6 +10,15 @@ from collections import defaultdict
 from fileutils.zipcrawl import ZipCrawler
 from functools import partial
 
+"""
+A Polyglot book is a series of entries of 16 bytes
+key    uint64
+move   uint16
+weight uint16
+learn  uint32
+
+Integers are stored big endian.
+"""
 ENTRY_STRUCT = struct.Struct('>QHHI')
 
 
@@ -23,6 +32,7 @@ def make_entry(board: chess.Board, move: chess.Move, weight: int):
 
 
 moves_table = defaultdict(list)
+unique_games = set()
 
 
 def add_move(board, new_move, weight):
@@ -39,18 +49,20 @@ def add_move(board, new_move, weight):
 def make_opening_book(args):
     chess.pgn.LOGGER.setLevel(50) # silence off PGN warnings
     try:
-        crawler = ZipCrawler([args.input])
+        crawler = ZipCrawler(args.input)
         crawler.set_action('.pgn', partial(read_pgn_file, args, [0]))
         crawler.crawl()
+        print()
+        output_book(args)
     except KeyboardInterrupt:
-        pass    
+        pass
     print()
-    output_book(args)
 
 
 def output_book(args):
     count = 0
     with open(args.out, 'wb') as f:
+        # the search algorithm expects entries to be sorted by key
         for key in sorted(moves_table.keys()):
             for move in moves_table[key]:
                 entry = ENTRY_STRUCT.pack(key, encode_move(move), int(move.weight), 0)
@@ -58,29 +70,26 @@ def output_book(args):
                 f.write(entry)
                 count += 1
     print (f'{args.out}: {count} moves')
-    
-    # read_book(args.out)
 
 
-def read_book(fname):
-    with chess.polyglot.MemoryMappedReader(fname) as reader:
-        for entry in reader:
-            print (entry.move.uci(), entry.weight, entry.learn)
-
-
-def read_pgn_file(args, count, fname):    
+def read_pgn_file(args, count, fname):
     for game in read_games(fname):
         try:
             info = game_metadata(game)
         except KeyError:
             continue
 
+        key = str(info)
+        if key in unique_games:
+            continue
+        unique_games.add(key)
+
         board = game.board()
         for move in list(game.mainline_moves())[:args.depth]:
-            color = chess.COLOR_NAMES[board.turn]            
+            color = chess.COLOR_NAMES[board.turn]
             result = info[color]['result']
             if result != LOSS:
-                add_move(board, move, 2*result)            
+                add_move(board, move, 2*result)
             board.push(move)
             assert board.is_valid(), board.status()
 
@@ -111,7 +120,7 @@ def test_encode_move():
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('input', nargs='?')
+    parser.add_argument('input', nargs='*')
     parser.add_argument('-d', '--depth', type=int, default=20)
     parser.add_argument('-o', '--out')
     parser.add_argument('--test', action='store_true')
@@ -119,6 +128,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.test:
+        # run tests
         test_encode_move()
         #
         # todo: write more tests

@@ -86,7 +86,7 @@ def __normalize_name(name):
 
 def game_metadata(game):
     headers = game.headers
-    info = { 'white': {}, 'black': {}, 'event': {}}
+    info = { 'white': {}, 'black': {}, 'event': {} }
     result = __result[headers['Result']]
     info['white']['name'] = __normalize_name(headers.get('White', None))
     info['black']['name'] = __normalize_name(headers.get('Black', None))
