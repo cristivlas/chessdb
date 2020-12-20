@@ -43,7 +43,11 @@ def __is_valid(game):
     for move in game.mainline_moves():
         if not board.is_legal(move):
             return False
+
         board.push(move)
+
+        if not board.is_valid():
+            return False
 
         # Make sure the winner was recorded correctly...
         reshdr = game.headers['Result']
