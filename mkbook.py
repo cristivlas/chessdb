@@ -27,12 +27,13 @@ def encode_move(move: chess.Move) -> int:
     return move.to_square | (move.from_square<<6) | promotion
 
 
-def make_entry(board: chess.Board, move: chess.Move, weight: int):
-    return ENTRY_STRUCT.pack(chess.polyglot.zobrist_hash(board), encode_move(move), weight, 0)
+def make_entry(key, move):
+    entry = ENTRY_STRUCT.pack(key, encode_move(move), int(move.weight) % 65535, 0)
+    assert len(entry)==16
+    return entry
 
 
 moves_table = defaultdict(list)
-unique_games = set()
 
 
 def add_move(board, new_move, weight):
@@ -68,9 +69,7 @@ def output_book(args):
 
             # Keep only the top 5, to limit the size of the output file
             for move in moves_list[:5]:
-                entry = ENTRY_STRUCT.pack(key, encode_move(move), int(move.weight), 0)
-                assert len(entry)==16
-                f.write(entry)
+                f.write(make_entry(key, move))
                 count += 1
     print (f'{args.out}: {count} moves')
 
@@ -81,11 +80,6 @@ def read_pgn_file(args, count, fname):
             info = game_metadata(game)
         except KeyError:
             continue
-
-        key = str(info)
-        if key in unique_games:
-            continue
-        unique_games.add(key)
 
         board = game.board()
         for move in list(game.mainline_moves())[:args.depth]:
@@ -120,6 +114,12 @@ def test_encode_move():
         assert test_move == move, (test_move, move)
 
 
+def test_large_weight():
+    move = chess.Move.from_uci('e2e4')
+    move.weight = 65536
+    make_entry(0, move)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
@@ -133,6 +133,7 @@ if __name__ == '__main__':
     if args.test:
         # run tests
         test_encode_move()
+        test_large_weight()
         #
         # todo: write more tests
         #

@@ -25,6 +25,9 @@ __result = {
 }
 
 
+__unique_games = set()
+
+
 def read_games(fname):
     with open(fname, encoding='utf-8') as f:
         while True:
@@ -32,8 +35,18 @@ def read_games(fname):
                 game = chess.pgn.read_game(f)
             except:
                 break
+
             if not game or game.errors:
                 break
+
+            try:
+                key = str(game_metadata(game))
+                if key in __unique_games:
+                    continue
+                __unique_games.add(key)
+            except:
+                continue
+
             if __is_valid(game):
                 yield game
 
