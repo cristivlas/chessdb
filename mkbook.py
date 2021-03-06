@@ -4,6 +4,8 @@ Utility for creating opening books in Polyglot format.
 """
 import argparse
 import chess, chess.pgn, chess.polyglot
+import csv
+import re
 import struct
 from chessutils.pgn import *
 from collections import defaultdict
@@ -74,7 +76,19 @@ def output_book(args):
     print (f'{args.out}: {count} moves')
 
 
+def read_ranked(fname):
+    names = []
+    with open(fname, 'r') as f:
+        for row in csv.reader(f):
+            names.append(f'.*{row[0].lower()}.*')
+    return names
+
+
 def read_pgn_file(args, count, fname):
+    # Filter by filename rather than by PGN headers -- for speed
+    if args.ranked and not any((re.match(f, fname.lower()) for f in args.ranked)):
+        return
+
     for game in read_games(fname):
         try:
             info = game_metadata(game)
@@ -85,7 +99,7 @@ def read_pgn_file(args, count, fname):
         for move in list(game.mainline_moves())[:args.depth]:
             color = chess.COLOR_NAMES[board.turn]
             result = info[color]['result']
-            if result != LOSS:
+            if result == WIN:
                 add_move(board, move, 2*result)
             board.push(move)
             assert board.is_valid(), board.status()
@@ -126,9 +140,13 @@ if __name__ == '__main__':
     parser.add_argument('input', nargs='*')
     parser.add_argument('-d', '--depth', type=int, default=20)
     parser.add_argument('-o', '--out')
+    parser.add_argument('-r', '--ranked')
     parser.add_argument('--test', action='store_true')
 
     args = parser.parse_args()
+
+    if args.ranked:
+        args.ranked = read_ranked(args.ranked)
 
     if args.test:
         # run tests
