@@ -8,9 +8,11 @@ import csv
 import re
 import struct
 from chessutils.pgn import *
+from dataclasses import dataclass
 from collections import defaultdict
 from fileutils.zipcrawl import ZipCrawler
 from functools import partial
+from os import path
 
 """
 A Polyglot book is a series of entries of 16 bytes
@@ -29,8 +31,14 @@ def encode_move(move: chess.Move) -> int:
     return move.to_square | (move.from_square<<6) | promotion
 
 
-def make_entry(key, move):
-    entry = ENTRY_STRUCT.pack(key, encode_move(move), int(move.weight) % 65535, 0)
+@dataclass
+class MoveStats:
+    win: int = 0
+    loss: int = 0
+
+
+def make_entry(key, move, weight):
+    entry = ENTRY_STRUCT.pack(key, encode_move(move), weight % 65535, 0)
     assert len(entry)==16
     return entry
 
@@ -38,14 +46,16 @@ def make_entry(key, move):
 moves_table = defaultdict(list)
 
 
-def add_move(board, new_move, weight):
-    assert weight
+def add(board, new_move, stats):
     moves_list = moves_table[chess.polyglot.zobrist_hash(board)]
+
     for move in moves_list:
-        if move.uci()==new_move.uci():
-            move.weight += weight
+        if move.uci() == new_move.uci():
+            move.stats.win += stats.win
+            move.stats.loss += stats.loss
             return
-    new_move.weight = weight
+
+    new_move.stats = stats
     moves_list.append(new_move)
 
 
@@ -66,13 +76,17 @@ def output_book(args):
     with open(args.out, 'wb') as f:
         # The search algorithm expects entries to be sorted by key.
         for key in sorted(moves_table.keys()):
-            moves_list = moves_table[key]
-            moves_list.sort(key=lambda move: move.weight, reverse=True)
+            moves = moves_table[key]
+            moves.sort(key=lambda move: move.stats.win - move.stats.loss, reverse=True)
 
-            # Keep only the top 5, to limit the size of the output file
-            for move in moves_list[:5]:
-                f.write(make_entry(key, move))
+            moves = moves[:5] # cap variations to keep file size reasonable
+            lowest = moves[-1].stats.win - moves[-1].stats.loss
+
+            for move in moves:
+                weight = move.stats.win - move.stats.loss - lowest + 1
+                f.write(make_entry(key, move, weight))
                 count += 1
+
     print (f'{args.out}: {count} moves')
 
 
@@ -80,15 +94,20 @@ def read_ranked(fname):
     names = []
     with open(fname, 'r') as f:
         for row in csv.reader(f):
+            # match strings containing player's last name; good enough?
             names.append(f'.*{row[0].lower()}.*')
     return names
+
+
+_flog = open('log.txt', 'w+')
 
 
 def read_pgn_file(args, count, fname):
     # Filter by filename rather than by PGN headers -- for speed
     if args.ranked and not any((re.match(f, fname.lower()) for f in args.ranked)):
+        _flog.write(f'- {path.splitext(path.basename(fname))[0]}\n')
         return
-
+    _flog.write(f'+ {path.splitext(path.basename(fname))[0]}\n')
     for game in read_games(fname):
         try:
             info = game_metadata(game)
@@ -100,7 +119,12 @@ def read_pgn_file(args, count, fname):
             color = chess.COLOR_NAMES[board.turn]
             result = info[color]['result']
             if result == WIN:
-                add_move(board, move, 2*result)
+                add(board, move, MoveStats(2, 0))
+            elif result == LOSS:
+                add(board, move, MoveStats(0, 2))
+            else:
+                add(board, move, MoveStats(1, 0))
+
             board.push(move)
             assert board.is_valid(), board.status()
 
@@ -130,8 +154,7 @@ def test_encode_move():
 
 def test_large_weight():
     move = chess.Move.from_uci('e2e4')
-    move.weight = 65536
-    make_entry(0, move)
+    make_entry(0, move, 65536)
 
 
 if __name__ == '__main__':
