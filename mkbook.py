@@ -88,16 +88,16 @@ def output_book(args):
         # The Polyglot search algorithm expects entries to be sorted by Zobrist key.
         for key in sorted(__moves_table.keys()):
             moves = __moves_table[key]
-            moves.sort(key=lambda move: move.stats.win - move.stats.loss, reverse=True)
+            moves.sort(key=lambda move: (move.stats.win, move.stats.win - move.stats.loss), reverse=True)
 
             moves = moves[:5] # cap variations to keep file size reasonable
-            lowest = moves[-1].stats.win - moves[-1].stats.loss
+            lowest = moves[-1].stats.win
 
             for move in moves:
                 # beyond the cutoff point, keep only moves with more wins than losses
                 if move.stats.depth >= args.cutoff and move.stats.win <= move.stats.loss:
                     continue
-                weight = move.stats.win - move.stats.loss - lowest + 1
+                weight = move.stats.win - lowest + 1
                 f.write(make_entry(key, move, weight))
                 count += 1
 
@@ -213,7 +213,7 @@ if __name__ == '__main__':
 
     parser.add_argument('input', nargs='*')
     parser.add_argument('-c', '--cutoff', type=int, default=20)
-    parser.add_argument('-d', '--depth', type=int, default=30)
+    parser.add_argument('-d', '--depth', type=int, default=40)
     parser.add_argument('-o', '--out')
     parser.add_argument('-r', '--ranked')
     parser.add_argument('--test', action='store_true')
