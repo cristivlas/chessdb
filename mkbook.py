@@ -35,6 +35,7 @@ def encode_move(move: chess.Move) -> int:
 class MoveStats:
     win: int = 0
     loss: int = 0
+    depth: int = 0
 
 
 def make_entry(key, move, weight):
@@ -43,29 +44,39 @@ def make_entry(key, move, weight):
     return entry
 
 
-moves_table = defaultdict(list)
-
-
-def add(board, new_move, stats):
-    moves_list = moves_table[chess.polyglot.zobrist_hash(board)]
-
+def add_move(moves_list, new_move):
     for move in moves_list:
         if move.uci() == new_move.uci():
-            move.stats.win += stats.win
-            move.stats.loss += stats.loss
+            move.stats.win += new_move.stats.win
+            move.stats.loss += new_move.stats.loss
+            move.stats.depth = min(move.stats.depth, new_move.stats.depth)
             return
-
-    new_move.stats = stats
     moves_list.append(new_move)
+
+
+def add(table, board, new_move):
+    add_move(table[chess.polyglot.zobrist_hash(board)], new_move)
+
+
+__moves_table = defaultdict(list)
+
+
+def merge(table):
+    for k, moves_list in table.items():
+        for move in moves_list:
+            add_move(__moves_table[k], move)
+    table.clear()
 
 
 def make_opening_book(args):
     chess.pgn.LOGGER.setLevel(50) # silence off PGN warnings
     try:
+        count = [0]
         crawler = ZipCrawler(args.input)
-        crawler.set_action('.pgn', partial(read_pgn_file, args, [0]))
+        crawler.set_action('.pgn', partial(read_pgn_file, args, count))
         crawler.crawl()
         print()
+        print(f'Read {count[0]} games. Generating opening book...')
         output_book(args)
     except KeyboardInterrupt:
         print()
@@ -74,15 +85,18 @@ def make_opening_book(args):
 def output_book(args):
     count = 0
     with open(args.out, 'wb') as f:
-        # The search algorithm expects entries to be sorted by key.
-        for key in sorted(moves_table.keys()):
-            moves = moves_table[key]
+        # The Polyglot search algorithm expects entries to be sorted by Zobrist key.
+        for key in sorted(__moves_table.keys()):
+            moves = __moves_table[key]
             moves.sort(key=lambda move: move.stats.win - move.stats.loss, reverse=True)
 
             moves = moves[:5] # cap variations to keep file size reasonable
             lowest = moves[-1].stats.win - moves[-1].stats.loss
 
             for move in moves:
+                # beyond the cutoff point, keep only moves with more wins than losses
+                if move.stats.depth >= args.cutoff and move.stats.win <= move.stats.loss:
+                    continue
                 weight = move.stats.win - move.stats.loss - lowest + 1
                 f.write(make_entry(key, move, weight))
                 count += 1
@@ -94,44 +108,61 @@ def read_ranked(fname):
     names = []
     with open(fname, 'r') as f:
         for row in csv.reader(f):
-            # match strings containing player's last name; good enough?
-            names.append(f'.*{row[0].lower()}.*')
+            last = row[0].strip().lower()
+            first = row[1].strip().lower()
+            names.append(f'{last}$|{last}(,{first[0]})+')
     return names
 
 
-_flog = open('log.txt', 'w+')
+_ranked = {}
+_flog = open('mkbook.log', 'w')
+_stat = ['-', '+']
+
+
+def is_ranked(args, name):
+    # no ranked players list given? treat all as ranked
+    if not args.ranked:
+        return True
+
+    def format_name(name):
+        return ','.join(name).lower()
+
+    r = _ranked.get(name, None)
+    if r is None:
+        n = format_name(name)
+        r = any((re.match(pattern, n) for pattern in args.ranked))
+        _ranked[name] = r
+        _flog.write(f'{_stat[r]} {name}\n')
+    return r
 
 
 def read_pgn_file(args, count, fname):
-    # Filter by filename rather than by PGN headers -- for speed
-    if args.ranked and not any((re.match(f, fname.lower()) for f in args.ranked)):
-        _flog.write(f'- {path.splitext(path.basename(fname))[0]}\n')
-        return
-    _flog.write(f'+ {path.splitext(path.basename(fname))[0]}\n')
-    for game in read_games(fname):
-        try:
-            info = game_metadata(game)
-        except KeyError:
-            continue
+    def on_meta(game, meta):
+        table.clear()
+        game.white = meta['white']['name']
+        game.black = meta['black']['name']
+        return is_ranked(args, game.white) or is_ranked(args, game.black)
 
-        board = game.board()
-        for move in list(game.mainline_moves())[:args.depth]:
+    def on_move(meta, board, move):
+        depth = len(board.move_stack)
+        if depth < args.depth:
             color = chess.COLOR_NAMES[board.turn]
-            result = info[color]['result']
-            if result == WIN:
-                add(board, move, MoveStats(2, 0))
-            elif result == LOSS:
-                add(board, move, MoveStats(0, 2))
-            else:
-                add(board, move, MoveStats(1, 0))
+            if is_ranked(args, meta[color]['name']):
+                result = meta[color]['result']
+                if result == WIN:
+                    move.stats = MoveStats(2, 0, depth)
+                elif result == LOSS:
+                    move.stats = MoveStats(0, 2, depth)
+                else:
+                    move.stats = MoveStats(1, 0, depth)
+                add(table, board, move)
 
-            board.push(move)
-            assert board.is_valid(), board.status()
+    table=defaultdict(list)
 
+    for game in GameFileReader(fname, on_meta, on_move):
         count[0] += 1
-        white = info['white']['name']
-        black = info['black']['name']
-        print (f'\033[K [{count[0]}] [{fname}] {white} / {black}]', end='\r')
+        print (f'\033[K [{count[0]}] [{fname}] {game.white} / {game.black}]', end='\r')
+        merge(table)
 
 
 def test_encode_move():
@@ -157,27 +188,48 @@ def test_large_weight():
     make_entry(0, move, 65536)
 
 
+def test_ranked(args):
+    assert args.ranked, 'This test expects a list of ranked players'
+    expected = [
+        (('Kasparov', ), True),
+        (('Kasparov', 'G'), True),
+        (('Kasparov', 'G.'), True),
+        (('Kasparov', 'Gary'), True),
+        (('Kasparov', 'Garry'), True),
+        (('Kasparov', 'S'), False),
+        (('Kasparov', 'Sergey'), False),
+        (('Polgar', ), True),
+        (('Polgar', 'Judith'), True),
+        (('Polgar', 'Ju'), True),
+        (('Polgar', 'S'), False),
+        (('Polgar', 'S.'), False),
+        (('polgar', 'j.'), True),
+    ]
+    for name, ranked in expected:
+        assert is_ranked(args, name)==ranked, (name, ranked)
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     parser.add_argument('input', nargs='*')
-    parser.add_argument('-d', '--depth', type=int, default=20)
+    parser.add_argument('-c', '--cutoff', type=int, default=20)
+    parser.add_argument('-d', '--depth', type=int, default=30)
     parser.add_argument('-o', '--out')
     parser.add_argument('-r', '--ranked')
     parser.add_argument('--test', action='store_true')
 
     args = parser.parse_args()
 
+    if args.depth < args.cutoff:
+        args.depth = args.cutoff
+
     if args.ranked:
         args.ranked = read_ranked(args.ranked)
 
     if args.test:
-        # run tests
         test_encode_move()
         test_large_weight()
-        #
-        # todo: write more tests
-        #
+        test_ranked(args)
     else:
         if not args.input or not args.out:
             parser.error('input and output are required')
