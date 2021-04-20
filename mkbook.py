@@ -5,6 +5,7 @@ Utility for creating opening books in Polyglot format.
 import argparse
 import chess, chess.pgn, chess.polyglot
 import csv
+import math
 import re
 import struct
 from chessutils.pgn import *
@@ -37,9 +38,15 @@ class MoveStats:
     loss: int = 0
     depth: int = 0
 
+    @property
+    def win_ratio(self):
+        return 1.0 if self.loss==0 else self.win / self.loss
 
-def make_entry(key, move, weight):
-    entry = ENTRY_STRUCT.pack(key, encode_move(move), weight % 65535, 0)
+
+def make_entry(key, move, weight, learn=0):
+    assert weight > 0, weight
+    assert learn >= 0, learn
+    entry = ENTRY_STRUCT.pack(key, encode_move(move), weight % 65535, learn % 65535)
     assert len(entry)==16
     return entry
 
@@ -82,22 +89,28 @@ def make_opening_book(args):
         print()
 
 
+def log2(n):
+    return int(math.log(n, 2)) if n else 0
+
+
 def output_book(args):
     count = 0
     with open(args.out, 'wb') as f:
         # The Polyglot search algorithm expects entries to be sorted by Zobrist key.
         for key in sorted(__moves_table.keys()):
+
+            # discard moves with win ratio < 1
             moves = [move for move in __moves_table[key] if move.stats.win > move.stats.loss]
             if not moves:
                 continue
 
-            moves.sort(key=lambda move: move.stats.win, reverse=True)
+            moves.sort(key=lambda move: (move.stats.win, move.stats.win_ratio), reverse=True)
 
-            moves = moves[:5] # cap variations to keep file size reasonable
-            lowest = moves[-1].stats.win
+            # cap alternate moves to keep file size reasonable
+            moves = moves[:args.alt_moves]
 
             for move in moves:
-                f.write(make_entry(key, move, weight=move.stats.win - lowest + 1))
+                f.write(make_entry(key, move, weight=max(1, log2(move.stats.win)), learn=log2(move.stats.loss)))
                 count += 1
 
     print (f'{args.out}: {count} moves')
@@ -211,6 +224,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     parser.add_argument('input', nargs='*')
+    parser.add_argument('-a', '--alt-moves', type=int, default=5)
     parser.add_argument('-d', '--depth', type=int, default=40)
     parser.add_argument('-o', '--out')
     parser.add_argument('-r', '--ranked')
@@ -218,6 +232,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
+    args.alt_moves = min(args.alt_moves, 5)
     if args.ranked:
         args.ranked = read_ranked(args.ranked)
 
