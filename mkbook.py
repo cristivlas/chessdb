@@ -95,6 +95,7 @@ def log2(n):
 
 def output_book(args):
     count = 0
+
     with open(args.out, 'wb') as f:
         # The Polyglot search algorithm expects entries to be sorted by Zobrist key.
         for key in sorted(__moves_table.keys()):
@@ -106,10 +107,8 @@ def output_book(args):
 
             moves.sort(key=lambda move: (move.stats.win, move.stats.win_ratio), reverse=True)
 
-            # cap alternate moves to keep file size reasonable
-            moves = moves[:args.alt_moves]
-
-            for move in moves:
+            # cap variations to keep file size reasonable
+            for move in moves[:args.max_variations]:
                 f.write(make_entry(key, move, weight=max(1, log2(move.stats.win)), learn=log2(move.stats.loss)))
                 count += 1
 
@@ -224,15 +223,14 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     parser.add_argument('input', nargs='*')
-    parser.add_argument('-a', '--alt-moves', type=int, default=5)
     parser.add_argument('-d', '--depth', type=int, default=40)
+    parser.add_argument('-m', '--max-variations', type=int, default=5)
     parser.add_argument('-o', '--out')
     parser.add_argument('-r', '--ranked')
     parser.add_argument('--test', action='store_true')
 
     args = parser.parse_args()
 
-    args.alt_moves = min(args.alt_moves, 5)
     if args.ranked:
         args.ranked = read_ranked(args.ranked)
 
