@@ -142,6 +142,9 @@ def is_ranked(args, name):
     if r is None:
         n = format_name(name)
         r = any((re.match(pattern, n) for pattern in args.ranked))
+        if not r:
+            n = format_name(reversed(name))
+            r = any((re.match(pattern, n) for pattern in args.ranked))
         _ranked[name] = r
         _flog.write(f'{_stat[r]} {name}\n')
     return r
