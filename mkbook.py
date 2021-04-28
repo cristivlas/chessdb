@@ -152,7 +152,10 @@ def is_ranked(args, name):
 
 def read_pgn_file(args, count, fname):
     def on_meta(game, meta):
-        table.clear()
+        # skip blitz games
+        if 'blitz' in meta['event']['name'].lower():
+            return False
+        meta['table'] = defaultdict(list)
         game.white = meta['white']['name']
         game.black = meta['black']['name']
         return is_ranked(args, game.white) or is_ranked(args, game.black)
@@ -169,14 +172,12 @@ def read_pgn_file(args, count, fname):
                     move.stats = MoveStats(0, 2, depth)
                 else:
                     move.stats = MoveStats(1, 0, depth)
-                add(table, board, move)
-
-    table=defaultdict(list)
+                add(meta['table'], board, move)
 
     for game in GameFileReader(fname, on_meta, on_move):
         count[0] += 1
         print (f'\033[K [{count[0]}] [{fname}] {game.white} / {game.black}]', end='\r')
-        merge(table)
+        merge(game.meta['table'])
 
 
 def test_encode_move():
