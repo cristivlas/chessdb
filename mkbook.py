@@ -3,17 +3,21 @@
 Utility for creating opening books in Polyglot format.
 """
 import argparse
-import chess, chess.pgn, chess.polyglot
 import csv
 import math
 import re
 import struct
-from chessutils.pgn import *
-from dataclasses import dataclass
 from collections import defaultdict
-from fileutils.zipcrawl import ZipCrawler
+from dataclasses import dataclass
 from functools import partial
 from os import path
+
+import chess
+import chess.pgn
+import chess.polyglot
+
+from chessutils.pgn import *
+from fileutils.zipcrawl import ZipCrawler
 
 """
 A Polyglot book is a series of entries of 16 bytes
@@ -51,6 +55,9 @@ def make_entry(key, move, weight, learn=0):
     return entry
 
 
+key = lambda board: chess.polyglot.zobrist_hash(board)
+
+
 def add_move(moves_list, new_move):
     for move in moves_list:
         if move.uci() == new_move.uci():
@@ -62,7 +69,7 @@ def add_move(moves_list, new_move):
 
 
 def add(table, board, new_move):
-    add_move(table[chess.polyglot.zobrist_hash(board)], new_move)
+    add_move(table[key(board)], new_move)
 
 
 __moves_table = defaultdict(list)
@@ -93,6 +100,14 @@ def log2(n):
     return int(math.log(n, 2)) if n else 0
 
 
+def stats(move):
+    return max(1, log2(move.stats.win)), log2(move.stats.loss)
+
+
+def is_csv_output(args):
+    return args.ext in ['.csv', '.txt']
+
+
 def output_book(args):
     count = 0
 
@@ -101,16 +116,22 @@ def output_book(args):
         for key in sorted(__moves_table.keys()):
 
             # discard moves with win ratio < 1
-            moves = [move for move in __moves_table[key] if move.stats.win > move.stats.loss]
+            moves = [move for move in __moves_table[key] if move.stats.win >= max(2, move.stats.loss)]
             if not moves:
                 continue
 
             moves.sort(key=lambda move: (move.stats.win, move.stats.win_ratio), reverse=True)
 
             # cap variations to keep file size reasonable
-            for move in moves[:args.max_variations]:
-                f.write(make_entry(key, move, weight=max(1, log2(move.stats.win)), learn=log2(move.stats.loss)))
-                count += 1
+            moves = moves[:args.max_variations]
+
+            if is_csv_output(args):
+                line = ','.join([str(c) for m in moves for c in (m.uci(), *stats(m))])
+                f.write(f'{key},{line}\n'.encode())
+            else:
+                for move in moves:
+                    f.write(make_entry(key, move, *stats(move)))
+            count += len(moves)
 
     print (f'{args.out}: {count} moves')
 
@@ -229,7 +250,7 @@ if __name__ == '__main__':
     parser.add_argument('input', nargs='*')
     parser.add_argument('-d', '--depth', type=int, default=40)
     parser.add_argument('-m', '--max-variations', type=int, default=5)
-    parser.add_argument('-o', '--out')
+    parser.add_argument('-o', '--out', required=True)
     parser.add_argument('-r', '--ranked')
     parser.add_argument('--test', action='store_true')
 
@@ -237,6 +258,11 @@ if __name__ == '__main__':
 
     if args.ranked:
         args.ranked = read_ranked(args.ranked)
+
+    args.ext = path.splitext(args.out.lower())[1]
+
+    if is_csv_output(args):
+        key = lambda board: board.epd()
 
     if args.test:
         test_encode_move()
