@@ -173,8 +173,7 @@ def is_ranked(args, name):
 
 def read_pgn_file(args, count, fname):
     def on_meta(game, meta):
-        # skip blitz games
-        if 'blitz' in meta['event']['name'].lower():
+        if args.no_blitz and 'blitz' in meta['event']['name'].lower():
             return False
         meta['table'] = defaultdict(list)
         game.white = meta['white']['name']
@@ -196,9 +195,10 @@ def read_pgn_file(args, count, fname):
                 add(meta['table'], board, move)
 
     for game in GameFileReader(fname, on_meta, on_move):
-        count[0] += 1
-        print (f'\033[K [{count[0]}] [{fname}] {game.white} / {game.black}]', end='\r')
-        merge(game.meta['table'])
+        if len(list(game.mainline_moves())) >= args.depth // 2:
+            count[0] += 1
+            print (f'\033[K [{count[0]}] [{fname}] {game.white} / {game.black}]', end='\r')
+            merge(game.meta['table'])
 
 
 def test_encode_move():
@@ -248,10 +248,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     parser.add_argument('input', nargs='*')
-    parser.add_argument('-d', '--depth', type=int, default=40)
-    parser.add_argument('-m', '--max-variations', type=int, default=5)
+    parser.add_argument('-d', '--depth', type=int, default=30)
+    parser.add_argument('-m', '--max-variations', type=int, default=10)
     parser.add_argument('-o', '--out', required=True)
     parser.add_argument('-r', '--ranked')
+    parser.add_argument('--no-blitz', action='store_true')
     parser.add_argument('--test', action='store_true')
 
     args = parser.parse_args()
