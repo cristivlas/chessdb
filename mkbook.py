@@ -194,11 +194,15 @@ def read_pgn_file(args, count, fname):
                     move.stats = MoveStats(1, 0, depth)
                 add(meta['table'], board, move)
 
-    for game in GameFileReader(fname, on_meta, on_move):
+    reader = GameFileReader(fname, on_meta, on_move)
+    for game in reader:
         if len(list(game.mainline_moves())) >= args.depth // 2:
             count[0] += 1
             print (f'\033[K [{count[0]}] [{fname}] {game.white} / {game.black}]', end='\r')
             merge(game.meta['table'])
+
+    if reader.errors:
+        print (reader.errors)
 
 
 def test_encode_move():

@@ -93,22 +93,20 @@ class Visitor(chess.pgn.GameBuilder):
 
 
 class GameFileReader:
-    def __init__(self, fpath, on_meta=None, on_move=None):
+    def __init__(self, fpath, on_meta=None, on_move=None, encoding='latin1'):
         self.fpath = fpath
         self.on_meta = on_meta or (lambda *_: True)
         self.on_move = on_move or (lambda *_: None)
+        self.encoding = encoding
         self.errors = None
 
     def __iter__(self):
         return self.games()
 
     def games(self):
-        with open(self.fpath, encoding='utf-8') as f:
+        with open(self.fpath, 'r', encoding=self.encoding) as f:
             while True:
-                try:
-                    game = chess.pgn.read_game(f, Visitor=partial(Visitor, self.on_meta, self.on_move))
-                except UnicodeDecodeError:
-                    break
+                game = chess.pgn.read_game(f, Visitor=partial(Visitor, self.on_meta, self.on_move))
                 if not game:
                     break
                 if game.errors:
