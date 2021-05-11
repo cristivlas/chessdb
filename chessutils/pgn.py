@@ -93,35 +93,34 @@ class Visitor(chess.pgn.GameBuilder):
 
 
 class GameFileReader:
-    def __init__(self, fpath, on_meta=None, on_move=None, encoding='latin1'):
-        self.fpath = fpath
+    def __init__(self, stream, on_meta=None, on_move=None):
+        self.stream = stream
         self.on_meta = on_meta or (lambda *_: True)
         self.on_move = on_move or (lambda *_: None)
-        self.encoding = encoding
         self.errors = None
 
     def __iter__(self):
         return self.games()
 
     def games(self):
-        with open(self.fpath, 'r', encoding=self.encoding) as f:
-            while True:
-                game = chess.pgn.read_game(f, Visitor=partial(Visitor, self.on_meta, self.on_move))
-                if not game:
-                    break
-                if game.errors:
-                    self.errors = game.errors
-                    break
-                if not game.valid:
-                    continue
-                if game.duplicate or game.filtered:
-                    assert not list(game.mainline_moves())
-                    continue
-                yield game
+        while True:
+            game = chess.pgn.read_game(self.stream, Visitor=partial(Visitor, self.on_meta, self.on_move))
+            if not game:
+                break
+            if game.errors:
+                self.errors = game.errors
+                break
+            if not game.valid:
+                continue
+            if game.duplicate or game.filtered:
+                assert not list(game.mainline_moves())
+                continue
+            yield game
 
 
-def read_games(fpath, on_meta=None, on_move=None):
-    return GameFileReader(fpath, on_meta, on_move)
+def read_games(fpath, on_meta=None, on_move=None, encoding='latin1'):
+    with open(self.fpath, 'r', encoding=encoding) as f:
+        return GameFileReader(f, on_meta, on_move)
 
 
 def __cleanup(info):

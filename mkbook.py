@@ -42,10 +42,6 @@ class MoveStats:
     loss: int = 0
     depth: int = 0
 
-    @property
-    def win_ratio(self):
-        return 1.0 if self.loss==0 else self.win / self.loss
-
 
 def make_entry(key, move, weight, learn=0):
     assert weight > 0, weight
@@ -109,18 +105,22 @@ def is_csv_output(args):
 
 
 def output_book(args):
+
+    def _sort_key(move):
+        return (move.stats.win / max(1, move.stats.loss), move.stats.win)
+
     count = 0
 
     with open(args.out, 'wb') as f:
         # The Polyglot search algorithm expects entries to be sorted by Zobrist key.
         for key in sorted(__moves_table.keys()):
 
-            # discard moves with win ratio < 1
+            # keep only moves with more wins than losses
             moves = [move for move in __moves_table[key] if move.stats.win >= max(2, move.stats.loss)]
             if not moves:
                 continue
-
-            moves.sort(key=lambda move: (move.stats.win, move.stats.win_ratio), reverse=True)
+            moves = __moves_table[key]
+            moves.sort(key=_sort_key, reverse=True)
 
             # cap variations to keep file size reasonable
             moves = moves[:args.max_variations]
@@ -194,12 +194,14 @@ def read_pgn_file(args, count, fname):
                     move.stats = MoveStats(1, 0, depth)
                 add(meta['table'], board, move)
 
-    reader = GameFileReader(fname, on_meta, on_move)
-    for game in reader:
-        if len(list(game.mainline_moves())) >= args.depth // 2:
-            count[0] += 1
-            print (f'\033[K [{count[0]}] [{fname}] {game.white} / {game.black}]', end='\r')
-            merge(game.meta['table'])
+
+    with open(fname, 'r', encoding='latin1') as f:
+        reader = GameFileReader(f, on_meta, on_move)
+        for game in reader:
+            if len(list(game.mainline_moves())) >= args.depth // 2:
+                count[0] += 1
+                print (f'\033[K [{count[0]}] [{fname}] {game.white} / {game.black}]', end='\r')
+                merge(game.meta['table'])
 
     if reader.errors:
         print (reader.errors)
